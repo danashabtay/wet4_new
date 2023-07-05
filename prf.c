@@ -280,7 +280,7 @@ pid_t run_target(const char* func, char** argv) {
             perror("ptrace");
             exit(1);
         }
-        execv(prog_name, argv);
+        execv(func, argv);
     } else {
         perror("fork");
         exit(1);
