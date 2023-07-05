@@ -172,24 +172,6 @@ unsigned long find_symbol(char* symbol_name, char* exe_file_name, int* error_val
 }
 
 
-
-int main(int argc, char *const argv[]) {
-    int err = 0;
-    unsigned long addr = find_symbol(argv[1], argv[2], &err);
-
-    if (err >= 0)
-        printf("%s will be loaded to 0x%lx\n", argv[1], addr);
-    else if (err == -2)
-        printf("%s is not a global symbol! :(\n", argv[1]);
-    else if (err == -1)
-        printf("%s not found!\n", argv[1]);
-    else if (err == -3)
-        printf("%s not an executable! :(\n", argv[2]);
-    else if (err == -4)
-        printf("%s is a global symbol, but will come from a shared library\n", argv[1]);
-    return 0;
-}
-
 void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) {
     int wait_status;
     struct user_regs_struct regs;
@@ -232,7 +214,7 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
         unsigned long return_address = ptrace(PTRACE_PEEKTEXT, child_pid, (void *)regs.rsp, NULL);
 
         ///removing the breakpoint:
-        ptrace(PTRACE_POKETEXT, child_pid, (void *) new_address, (void *) instruction);
+        ptrace(PTRACE_POKETEXT, child_pid, (void *) address, (void *) data);
         regs.rip -= 1;
         ptrace(PTRACE_SETREGS, child_pid, 0, &regs);
 
@@ -298,7 +280,7 @@ pid_t run_target(const char* func, char** argv) {
             perror("ptrace");
             exit(1);
         }
-        execv(programname, argv);
+        execv(prog_name, argv);
     } else {
         perror("fork");
         exit(1);
@@ -385,7 +367,7 @@ int main(int argc, char** argv) {
                 //create dynsym table:
                 Elf64_Sym *dynsym_table = malloc(sizeof (Elf64_Sym) * num_of_dynsymbols);
                 if(fread(dynsym_table, sizeof(Elf64_Sym), num_of_dynsymbols, file) != num_of_dynsymbols){
-                    free(section_headers);
+                    free(section_header_table);
                     free(dynsym_table);
                     fclose(file);
                     return -1;
@@ -423,8 +405,6 @@ int main(int argc, char** argv) {
         //CLOSE AND FREE ALL:
         fclose(file);
         free(section_header_table);
-        free(curr_rela_table);
-        free(dynsym_table);
     }
     else if(*val == 1) {
         real_func_address = res;
