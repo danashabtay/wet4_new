@@ -16,6 +16,8 @@
 #include <sys/user.h>
 #include <sys/mman.h>
 #include <sys/ptrace.h>
+#include <sys/wait.h>
+
 
 #define	ET_NONE	0	//No file type
 #define	ET_REL	1	//Relocatable file
@@ -181,14 +183,18 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
     wait(&wait_status);
 
     ///save address;
-    unsigned  long  address = func_addr;
-    if (is_extern) {
-        unsigned long addr_data = ptrace(PTRACE_PEEKTEXT, child_pid, (void *) address, NULL);
-        address = addr_data - 6;
-    }
-
+    unsigned long address = func_addr;
+    unsigned long curr_rsp;
+    unsigned long return_address;
 
     while(!WIFEXITED(wait_status)) {
+        if (is_extern) {
+            unsigned long addr_data = ptrace(PTRACE_PEEKTEXT, child_pid, (void *) address, NULL);
+            if(func_call_count == 0){
+                address = addr_data - 6;
+            }
+            address = addr_data;
+        }
 
         ///save original inst an fun address:
         unsigned long data = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)address, NULL);
@@ -208,15 +214,16 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
         func_call_count++;
 
         ptrace(PTRACE_GETREGS, child_pid, NULL, &regs);
-        printf("PRF:: run %llu first parameter is %d\n", func_call_count, (int)regs.rdi);
+        printf("PRF:: run %lu first parameter is %d\n", func_call_count, (int)regs.rdi);
 
-        unsigned long curr_rsp = regs.rsp;
-        unsigned long return_address = ptrace(PTRACE_PEEKTEXT, child_pid, (void *)regs.rsp, NULL);
+        curr_rsp = regs.rsp;
 
         ///removing the breakpoint:
         ptrace(PTRACE_POKETEXT, child_pid, (void *) address, (void *) data);
         regs.rip -= 1;
         ptrace(PTRACE_SETREGS, child_pid, 0, &regs);
+
+        return_address = ptrace(PTRACE_PEEKTEXT, child_pid, (void *)curr_rsp, NULL);
 
         ///save original inst af ret address:
         data = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)return_address, NULL);
@@ -245,6 +252,7 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
             ptrace(PTRACE_GETREGS, child_pid, 0, &regs);
         }
 
+        ret_data_trap = (data & 0xFFFFFFFFFFFFFF00) | 0xCC;
         ptrace(PTRACE_POKETEXT, child_pid, (void*)return_address, (void*)ret_data_trap);
 
         ///let child run until first breakpoint:
@@ -256,12 +264,14 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
             break;
 
         ptrace(PTRACE_GETREGS, child_pid, NULL, &regs);
-        printf("PRF:: run #%d returned with %d\n", func_call_count, (int) regs.rax);
+        printf("PRF:: run #%ld returned with %d\n", func_call_count, (int) regs.rax);
 
         ///removing the breakpoint:
         ptrace(PTRACE_POKETEXT, child_pid, (void *) return_address, (void *) data);
         regs.rip -= 1;
         ptrace(PTRACE_SETREGS, child_pid, 0, &regs);
+
+        address=func_addr;
     }
 
     ///exited while:
@@ -292,126 +302,121 @@ pid_t run_target(const char* func, char** argv) {
 
 
 int main(int argc, char** argv) {
-    char* func_name = argv[0];
-    char* program_name = argv[1];
-    int *val = 0;
-    unsigned long res = find_symbol(func_name, program_name,val);
+    char* func_name = argv[1];
+    char* program_name = argv[2];
+    int val = 0;
+    unsigned long res = find_symbol(func_name, program_name,&val);
 
 //check if the program is an exe:
-    if(*val == -3){
+    if(val == -3){
         printf("PRF:: %s not an executable!\n", program_name);
         return 0;
     }
 
 //check for the func_name in symtab:
-    if(*val == -1){
+    if(val == -1){
         printf("PRF:: %s not found! :(\n", func_name);
         return 0;
     }
 
 //check if func_name is global:
-    if(*val == -2){
-        printf("PRF:: %s is not a global symbol! :(\n", func_name);
+    if(val == -2){
+        printf("PRF:: %s is not a global symbol!\n", func_name);
         return 0;
     }
 
     Elf64_Addr real_func_address;
     bool is_extern=false;
 //check if func_name is an external func:
-    if(*val == -4){
+    if(val == -4){
+        is_extern=true;
         // do step 5:
         FILE *file = fopen(program_name, "rb");
         if (file == NULL) {
-            return -1;
+            return 0;
         }
 
+        // Load the ELF file header into a struct:
         Elf64_Ehdr elf_header;
-        if(fread(&elf_header, sizeof(elf_header), 1, file)!=1){
+        if(fread(&elf_header, sizeof(elf_header), 1, file) != 1){
             fclose(file);
             return -1;
         }
 
-        // find section table offset from beginning of file:
-        Elf64_Off section_offset=elf_header.e_shoff;
-        // size of entry in section table:
-        Elf64_Half section_size=elf_header.e_shentsize; //not used
-        //num of entries in section table:
-        Elf64_Half section_num=elf_header.e_shnum;
+        // Set the file position indicator to the start of the Section header table:
+        fseek(file, (long) elf_header.e_shoff, SEEK_SET);
 
-        Elf64_Shdr* section_header_table= (Elf64_Shdr*)(malloc(sizeof(Elf64_Shdr) * section_num));
-        /**setting file to point at the start of section header table**/
-        fseek(file,(long) section_offset, SEEK_SET);
-        if(fread(section_header_table,sizeof(Elf64_Shdr),section_num,file)!=section_num){
-            free(section_header_table);
+        // Read all section headers into an array:
+        Elf64_Shdr *section_headers = malloc(sizeof (Elf64_Shdr) * elf_header.e_shnum);
+        if(fread(section_headers, sizeof(Elf64_Shdr), elf_header.e_shnum, file) != elf_header.e_shnum) {
+            free(section_headers);
             fclose(file);
             return -1;
         }
 
-        //find all rela section index inside section header table:
-        int index=0;
-        for(int i=0;i<section_num;++i){
-            if(section_header_table[i].sh_type==4) {
-                index=i;
 
-                int rela_dynsym_index = (int)section_header_table[index].sh_link;
+        // Go over all the sections:
+        for (int i = 0; i < elf_header.e_shnum; ++i) {
+            // Read the current section:
+            Elf64_Shdr current_section_header = section_headers[i];
+            unsigned long shstrtab_offset = section_headers[elf_header.e_shstrndx].sh_offset;
 
-                unsigned long num_entries_rela = section_header_table[index].sh_size/section_header_table[index].sh_entsize;; //Elf64_Xword for num symbols
+            // Check if the section is of type RELA:
+            if (current_section_header.sh_type == 4) {
+                Elf64_Shdr symtable = section_headers[current_section_header.sh_link];
 
-                long str_offset = section_header_table[rela_dynsym_index].sh_link;
+                // Set the file position indicator to the start of the Symbol Table (this section):
+                fseek(file, (long) symtable.sh_offset, SEEK_SET);
 
-                unsigned long dynsym_offset = section_header_table[rela_dynsym_index].sh_offset;
-                unsigned long dynsym_entry_size = section_header_table[rela_dynsym_index].sh_entsize;
-                unsigned long num_of_dynsymbols = section_header_table[rela_dynsym_index].sh_size / dynsym_entry_size;
-
-                fseek(file, (long)dynsym_offset,SEEK_SET);
-                //create dynsym table:
-                Elf64_Sym *dynsym_table = malloc(sizeof (Elf64_Sym) * num_of_dynsymbols);
-                if(fread(dynsym_table, sizeof(Elf64_Sym), num_of_dynsymbols, file) != num_of_dynsymbols){
-                    free(section_header_table);
-                    free(dynsym_table);
+                unsigned long symbol_entry_size = symtable.sh_entsize;
+                unsigned long num_of_symbols = symtable.sh_size / symbol_entry_size;
+                // Get all the symbols in an array:
+                Elf64_Sym *symbols = malloc(sizeof (Elf64_Sym) * num_of_symbols);
+                if(fread(symbols, sizeof(Elf64_Sym), num_of_symbols, file) != num_of_symbols){
+                    free(section_headers);
+                    free(symbols);
                     fclose(file);
                     return -1;
                 }
 
-                //create rela table:
-                Elf64_Rela* curr_rela_table=(Elf64_Rela*)malloc(sizeof(Elf64_Rela)*num_entries_rela);
-                /**setting file to point at the start of curr table**/
-                fseek(file, (long)section_header_table[index].sh_offset,SEEK_SET);
+                Elf64_Shdr strtable = section_headers[symtable.sh_link];
+                // Compare the symbol name:
+                long strtab_offset = (long) strtable.sh_offset;
 
-                //reading curr table from file and saving it
-                if(fread(curr_rela_table, sizeof(Elf64_Rela), num_entries_rela, file)!=num_entries_rela){
+                // Set the file position indicator to the start of the relocation table (this section):
+                fseek(file, (long) current_section_header.sh_offset, SEEK_SET);
+
+                unsigned long relocation_entry_size = current_section_header.sh_entsize;
+                unsigned long num_of_relocations = current_section_header.sh_size / relocation_entry_size;
+                // Get all the symbols in an array:
+                Elf64_Rela *relocations = malloc(sizeof (Elf64_Rela) * num_of_relocations);
+                if(fread(relocations, sizeof(Elf64_Rela), num_of_relocations, file) != num_of_relocations){
+                    free(section_headers);
+                    free(symbols);
+                    free(relocations);
                     fclose(file);
-                    free(section_header_table);
-                    free(curr_rela_table);
-                    free(dynsym_table);
                     return -1;
                 }
-                //iterate over curr rela table entries:
-                for(int j=0; j<num_entries_rela; j++){
-                    Elf64_Rela current_relocation = curr_rela_table[j];
-                    Elf64_Xword info = current_relocation.r_info;
-                    int index_in_dynsym = ELF64_R_SYM(info);
-                    if(comparing_name(file, str_offset+dynsym_table[index_in_dynsym].st_name,func_name)==true){
-                        //found the symbol!
-                        real_func_address = curr_rela_table[i].r_offset;
-                        is_extern=true;
+
+                for (int j = 0; j < num_of_relocations; ++j) {
+                    Elf64_Rela current_relocation = relocations[j];
+                    int index_in_symbols = ELF64_R_SYM(current_relocation.r_info);
+
+                    bool is_wanted_symbol = comparing_name(file, strtab_offset + symbols[index_in_symbols].st_name, func_name);
+
+                    if (is_wanted_symbol) {
+                        real_func_address = current_relocation.r_offset;
                     }
                 }
             }
-            else {
-                continue;
-            }
         }
-        //CLOSE AND FREE ALL:
-        fclose(file);
-        free(section_header_table);
     }
-    else if(*val == 1) {
+    else if(val == 1) {
         real_func_address = res;
     }
 
     //step 6:
-    pid_t child_pid = run_target(program_name, argv);
+    pid_t child_pid = run_target(program_name, argv+2);
     run_sys_debugger(child_pid, real_func_address, is_extern); // Initial call is the first call
 
     return 0;
