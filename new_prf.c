@@ -322,7 +322,7 @@ int main(int argc, char** argv) {
 //check if func_name is an external func:
     if(*val == -4){
         // do step 5:
-        FILE *file = fopen(exe_file_name, "rb");
+        FILE *file = fopen(program_name, "rb");
         if (file == NULL) {
             return 0;
         }
@@ -393,7 +393,7 @@ int main(int argc, char** argv) {
                     Elf64_Rela current_relocation = relocations[j];
                     int index_in_symbols = ELF64_R_SYM(current_relocation.r_info);
 
-                    bool is_wanted_symbol = compare_symbol_name(file, strtab_offset + symbols[index_in_symbols].st_name, symbol_name);
+                    bool is_wanted_symbol = compare_symbol_name(file, strtab_offset + symbols[index_in_symbols].st_name, func_name);
 
                     if (is_wanted_symbol) {
                         real_func_address = current_relocation.r_offset;
