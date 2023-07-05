@@ -2,7 +2,6 @@
 // Created by user on 05/07/2023.
 //
 
-#include <iostream>
 #include "elf64.h"
 #include <stdbool.h>
 #include <stdlib.h>
@@ -24,7 +23,7 @@
 #define	ET_DYN	3	//Shared object file
 #define	ET_CORE	4	//Core file
 
-bool comparing_name(FILE* file,Elf64_Off offset_to_name,const char* symbol_name_given){
+bool comparing_name(FILE* file,unsigned long offset_to_name,const char* symbol_name_given){
     fseek(file,offset_to_name,SEEK_SET);
     int sym_char_strtab =fgetc(file);
     int j=0;
