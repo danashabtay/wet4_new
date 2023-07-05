@@ -321,7 +321,7 @@ int main(int argc, char** argv) {
 
 //check if func_name is global:
     if(val == -2){
-        printf("PRF:: %s is not a global symbol! :(\n", func_name);
+        printf("PRF:: %s is not a global symbol!\n", func_name);
         return 0;
     }
 
@@ -416,7 +416,7 @@ int main(int argc, char** argv) {
     }
 
     //step 6:
-    pid_t child_pid = run_target(program_name, argv);
+    pid_t child_pid = run_target(program_name, argv+2);
     run_sys_debugger(child_pid, real_func_address, is_extern); // Initial call is the first call
 
     return 0;
