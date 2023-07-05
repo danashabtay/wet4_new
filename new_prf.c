@@ -304,23 +304,23 @@ pid_t run_target(const char* func, char** argv) {
 int main(int argc, char** argv) {
     char* func_name = argv[0];
     char* program_name = argv[1];
-    int *val = 0;
-    unsigned long res = find_symbol(func_name, program_name,val);
+    int val = 0;
+    unsigned long res = find_symbol(func_name, program_name,&val);
 
 //check if the program is an exe:
-    if(*val == -3){
+    if(val == -3){
         printf("PRF:: %s not an executable!\n", program_name);
         return 0;
     }
 
 //check for the func_name in symtab:
-    if(*val == -1){
+    if(val == -1){
         printf("PRF:: %s not found! :(\n", func_name);
         return 0;
     }
 
 //check if func_name is global:
-    if(*val == -2){
+    if(val == -2){
         printf("PRF:: %s is not a global symbol! :(\n", func_name);
         return 0;
     }
@@ -328,7 +328,7 @@ int main(int argc, char** argv) {
     Elf64_Addr real_func_address;
     bool is_extern=false;
 //check if func_name is an external func:
-    if(*val == -4){
+    if(val == -4){
         is_extern=true;
         // do step 5:
         FILE *file = fopen(program_name, "rb");
@@ -411,7 +411,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    else if(*val == 1) {
+    else if(val == 1) {
         real_func_address = res;
     }
 
