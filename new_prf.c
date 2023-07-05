@@ -49,6 +49,7 @@ bool comparing_name(FILE* file,unsigned long offset_to_name,const char* symbol_n
  * return value		- The address which the symbol_name will be loaded to, if the symbol was found and is global.
  */
 unsigned long find_symbol(char* symbol_name, char* exe_file_name, int* error_val) {
+    printf("here");
     FILE *file = fopen(exe_file_name, "rb");
     if (file == NULL) {
         return -1;
@@ -306,7 +307,6 @@ int main(int argc, char** argv) {
     char* program_name = argv[1];
     int *val = 0;
     unsigned long res = find_symbol(func_name, program_name,val);
-    printf("here");
 
 //check if the program is an exe:
     if(*val == -3){
