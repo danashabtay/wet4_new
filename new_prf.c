@@ -302,8 +302,8 @@ pid_t run_target(const char* func, char** argv) {
 
 
 int main(int argc, char** argv) {
-    char* func_name = argv[0];
-    char* program_name = argv[1];
+    char* func_name = argv[1];
+    char* program_name = argv[2];
     int val = 0;
     unsigned long res = find_symbol(func_name, program_name,&val);
 
