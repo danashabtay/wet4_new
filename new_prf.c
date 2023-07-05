@@ -322,91 +322,85 @@ int main(int argc, char** argv) {
 //check if func_name is an external func:
     if(*val == -4){
         // do step 5:
-        FILE *file = fopen(program_name, "rb");
+        FILE *file = fopen(exe_file_name, "rb");
         if (file == NULL) {
-            return -1;
+            return 0;
         }
 
+        // Load the ELF file header into a struct:
         Elf64_Ehdr elf_header;
-        if(fread(&elf_header, sizeof(elf_header), 1, file)!=1){
+        if(fread(&elf_header, sizeof(elf_header), 1, file) != 1){
             fclose(file);
             return -1;
         }
 
-        // find section table offset from beginning of file:
-        Elf64_Off section_offset=elf_header.e_shoff;
-        // size of entry in section table:
-        Elf64_Half section_size=elf_header.e_shentsize; //not used
-        //num of entries in section table:
-        Elf64_Half section_num=elf_header.e_shnum;
+        // Set the file position indicator to the start of the Section header table:
+        fseek(file, (long) elf_header.e_shoff, SEEK_SET);
 
-        Elf64_Shdr* section_header_table= (Elf64_Shdr*)(malloc(sizeof(Elf64_Shdr) * section_num));
-        /**setting file to point at the start of section header table**/
-        fseek(file,(long) section_offset, SEEK_SET);
-        if(fread(section_header_table,sizeof(Elf64_Shdr),section_num,file)!=section_num){
-            free(section_header_table);
+        // Read all section headers into an array:
+        Elf64_Shdr *section_headers = malloc(sizeof (Elf64_Shdr) * elf_header.e_shnum);
+        if(fread(section_headers, sizeof(Elf64_Shdr), elf_header.e_shnum, file) != elf_header.e_shnum) {
+            free(section_headers);
             fclose(file);
             return -1;
         }
 
-        //find all rela section index inside section header table:
-        int index=0;
-        for(int i=0;i<section_num;++i){
-            if(section_header_table[i].sh_type==4) {
-                index=i;
 
-                int rela_dynsym_index = (int)section_header_table[index].sh_link;
+        // Go over all the sections:
+        for (int i = 0; i < elf_header.e_shnum; ++i) {
+            // Read the current section:
+            Elf64_Shdr current_section_header = section_headers[i];
+            unsigned long shstrtab_offset = section_headers[elf_header.e_shstrndx].sh_offset;
 
-                unsigned long num_entries_rela = section_header_table[index].sh_size/section_header_table[index].sh_entsize;; //Elf64_Xword for num symbols
+            // Check if the section is of type RELA:
+            if (current_section_header.sh_type == 4) {
+                Elf64_Shdr symtable = section_headers[current_section_header.sh_link];
 
-                long str_offset = section_header_table[rela_dynsym_index].sh_link;
+                // Set the file position indicator to the start of the Symbol Table (this section):
+                fseek(file, (long) symtable.sh_offset, SEEK_SET);
 
-                unsigned long dynsym_offset = section_header_table[rela_dynsym_index].sh_offset;
-                unsigned long dynsym_entry_size = section_header_table[rela_dynsym_index].sh_entsize;
-                unsigned long num_of_dynsymbols = section_header_table[rela_dynsym_index].sh_size / dynsym_entry_size;
-
-                fseek(file, (long)dynsym_offset,SEEK_SET);
-                //create dynsym table:
-                Elf64_Sym *dynsym_table = malloc(sizeof (Elf64_Sym) * num_of_dynsymbols);
-                if(fread(dynsym_table, sizeof(Elf64_Sym), num_of_dynsymbols, file) != num_of_dynsymbols){
-                    free(section_header_table);
-                    free(dynsym_table);
+                unsigned long symbol_entry_size = symtable.sh_entsize;
+                unsigned long num_of_symbols = symtable.sh_size / symbol_entry_size;
+                // Get all the symbols in an array:
+                Elf64_Sym *symbols = malloc(sizeof (Elf64_Sym) * num_of_symbols);
+                if(fread(symbols, sizeof(Elf64_Sym), num_of_symbols, file) != num_of_symbols){
+                    free(section_headers);
+                    free(symbols);
                     fclose(file);
                     return -1;
                 }
 
-                //create rela table:
-                Elf64_Rela* curr_rela_table=(Elf64_Rela*)malloc(sizeof(Elf64_Rela)*num_entries_rela);
-                /**setting file to point at the start of curr table**/
-                fseek(file, (long)section_header_table[index].sh_offset,SEEK_SET);
+                Elf64_Shdr strtable = section_headers[symtable.sh_link];
+                // Compare the symbol name:
+                long strtab_offset = (long) strtable.sh_offset;
 
-                //reading curr table from file and saving it
-                if(fread(curr_rela_table, sizeof(Elf64_Rela), num_entries_rela, file)!=num_entries_rela){
+                // Set the file position indicator to the start of the relocation table (this section):
+                fseek(file, (long) current_section_header.sh_offset, SEEK_SET);
+
+                unsigned long relocation_entry_size = current_section_header.sh_entsize;
+                unsigned long num_of_relocations = current_section_header.sh_size / relocation_entry_size;
+                // Get all the symbols in an array:
+                Elf64_Rela *relocations = malloc(sizeof (Elf64_Rela) * num_of_relocations);
+                if(fread(relocations, sizeof(Elf64_Rela), num_of_relocations, file) != num_of_relocations){
+                    free(section_headers);
+                    free(symbols);
+                    free(relocations);
                     fclose(file);
-                    free(section_header_table);
-                    free(curr_rela_table);
-                    free(dynsym_table);
                     return -1;
                 }
-                //iterate over curr rela table entries:
-                for(int j=0; j<num_entries_rela; j++){
-                    Elf64_Rela current_relocation = curr_rela_table[j];
-                    Elf64_Xword info = current_relocation.r_info;
-                    int index_in_dynsym = ELF64_R_SYM(info);
-                    if(comparing_name(file, str_offset+dynsym_table[index_in_dynsym].st_name,func_name)==true){
-                        //found the symbol!
-                        real_func_address = curr_rela_table[i].r_offset;
-                        is_extern=true;
+
+                for (int j = 0; j < num_of_relocations; ++j) {
+                    Elf64_Rela current_relocation = relocations[j];
+                    int index_in_symbols = ELF64_R_SYM(current_relocation.r_info);
+
+                    bool is_wanted_symbol = compare_symbol_name(file, strtab_offset + symbols[index_in_symbols].st_name, symbol_name);
+
+                    if (is_wanted_symbol) {
+                        real_func_address = current_relocation.r_offset;
                     }
                 }
             }
-            else {
-                continue;
-            }
         }
-        //CLOSE AND FREE ALL:
-        fclose(file);
-        free(section_header_table);
     }
     else if(*val == 1) {
         real_func_address = res;
