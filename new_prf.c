@@ -306,6 +306,7 @@ int main(int argc, char** argv) {
     char* program_name = argv[1];
     int *val = 0;
     unsigned long res = find_symbol(func_name, program_name,val);
+    printf("here");
 
 //check if the program is an exe:
     if(*val == -3){
