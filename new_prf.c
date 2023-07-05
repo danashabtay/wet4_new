@@ -183,14 +183,16 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
     wait(&wait_status);
 
     ///save address;
-    unsigned  long  address = func_addr;
-    if (is_extern) {
-        unsigned long addr_data = ptrace(PTRACE_PEEKTEXT, child_pid, (void *) address, NULL);
-        address = addr_data - 6;
-    }
-
+    unsigned long address = func_addr;
 
     while(!WIFEXITED(wait_status)) {
+        if (is_extern) {
+            unsigned long addr_data = ptrace(PTRACE_PEEKTEXT, child_pid, (void *) address, NULL);
+            if(func_call_count == 0){
+                address = addr_data - 6;
+            }
+            address = addr_data;
+        }
 
         ///save original inst an fun address:
         unsigned long data = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)address, NULL);
