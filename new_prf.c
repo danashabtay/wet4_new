@@ -49,7 +49,6 @@ bool comparing_name(FILE* file,unsigned long offset_to_name,const char* symbol_n
  * return value		- The address which the symbol_name will be loaded to, if the symbol was found and is global.
  */
 unsigned long find_symbol(char* symbol_name, char* exe_file_name, int* error_val) {
-    printf("here");
     FILE *file = fopen(exe_file_name, "rb");
     if (file == NULL) {
         return -1;
@@ -330,6 +329,7 @@ int main(int argc, char** argv) {
     bool is_extern=false;
 //check if func_name is an external func:
     if(*val == -4){
+        is_extern=true;
         // do step 5:
         FILE *file = fopen(program_name, "rb");
         if (file == NULL) {
