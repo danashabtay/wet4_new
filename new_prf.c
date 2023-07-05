@@ -16,6 +16,8 @@
 #include <sys/user.h>
 #include <sys/mman.h>
 #include <sys/ptrace.h>
+#include <sys/wait.h>
+
 
 #define	ET_NONE	0	//No file type
 #define	ET_REL	1	//Relocatable file
