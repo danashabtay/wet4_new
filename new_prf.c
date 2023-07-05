@@ -184,6 +184,8 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
 
     ///save address;
     unsigned long address = func_addr;
+    unsigned long curr_rsp;
+    unsigned long return_address;
 
     while(!WIFEXITED(wait_status)) {
         if (is_extern) {
@@ -212,15 +214,16 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
         func_call_count++;
 
         ptrace(PTRACE_GETREGS, child_pid, NULL, &regs);
-        printf("PRF:: run %llu first parameter is %d\n", func_call_count, (int)regs.rdi);
+        printf("PRF:: run %lu first parameter is %d\n", func_call_count, (int)regs.rdi);
 
-        unsigned long curr_rsp = regs.rsp;
-        unsigned long return_address = ptrace(PTRACE_PEEKTEXT, child_pid, (void *)regs.rsp, NULL);
+        curr_rsp = regs.rsp;
 
         ///removing the breakpoint:
         ptrace(PTRACE_POKETEXT, child_pid, (void *) address, (void *) data);
         regs.rip -= 1;
         ptrace(PTRACE_SETREGS, child_pid, 0, &regs);
+
+        return_address = ptrace(PTRACE_PEEKTEXT, child_pid, (void *)curr_rsp, NULL);
 
         ///save original inst af ret address:
         data = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)return_address, NULL);
@@ -249,6 +252,7 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
             ptrace(PTRACE_GETREGS, child_pid, 0, &regs);
         }
 
+        ret_data_trap = (data & 0xFFFFFFFFFFFFFF00) | 0xCC;
         ptrace(PTRACE_POKETEXT, child_pid, (void*)return_address, (void*)ret_data_trap);
 
         ///let child run until first breakpoint:
@@ -260,12 +264,14 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
             break;
 
         ptrace(PTRACE_GETREGS, child_pid, NULL, &regs);
-        printf("PRF:: run #%d returned with %d\n", func_call_count, (int) regs.rax);
+        printf("PRF:: run #%ld returned with %d\n", func_call_count, (int) regs.rax);
 
         ///removing the breakpoint:
         ptrace(PTRACE_POKETEXT, child_pid, (void *) return_address, (void *) data);
         regs.rip -= 1;
         ptrace(PTRACE_SETREGS, child_pid, 0, &regs);
+
+        address=func_addr;
     }
 
     ///exited while:
