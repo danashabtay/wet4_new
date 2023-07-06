@@ -417,10 +417,11 @@ int main(int argc, char** argv) {
         fclose(file);
         free(section_header_table);
     }
-    else if(val == 1) {
+    /*
+    else if(*val == 1) {
         real_func_address = res;
     }
-
+*/
     //step 6:
     pid_t child_pid = run_target(program_name, argv+2);
     run_sys_debugger(child_pid, real_func_address, is_extern); // Initial call is the first call
