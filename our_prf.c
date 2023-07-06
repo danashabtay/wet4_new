@@ -368,8 +368,8 @@ int main(int argc, char** argv) {
 
                 unsigned long num_entries_rela = section_header_table[index].sh_size/section_header_table[index].sh_entsize;; //Elf64_Xword for num symbols
 
-                long str_offset = section_header_table[rela_dynsym_index].sh_link;
-
+                int str_index = section_header_table[rela_dynsym_index].sh_link;
+                long str_offset = section_header_table[str_index].sh_offset;
                 unsigned long dynsym_offset = section_header_table[rela_dynsym_index].sh_offset;
                 unsigned long dynsym_entry_size = section_header_table[rela_dynsym_index].sh_entsize;
                 unsigned long num_of_dynsymbols = section_header_table[rela_dynsym_index].sh_size / dynsym_entry_size;
