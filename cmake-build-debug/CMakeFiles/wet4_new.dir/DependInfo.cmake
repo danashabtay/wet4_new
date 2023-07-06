@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_C
-  "C:/technion/ATAM/4/wet4_new/main.c" "C:/technion/ATAM/4/wet4_new/cmake-build-debug/CMakeFiles/wet4_new.dir/main.c.obj"
+  "C:/Users/hofit/Desktop/תואר/שנה ב/סמסטר ד/אתמ/wet4_new/main.c" "C:/Users/hofit/Desktop/תואר/שנה ב/סמסטר ד/אתמ/wet4_new/cmake-build-debug/CMakeFiles/wet4_new.dir/main.c.obj"
   )
 set(CMAKE_C_COMPILER_ID "GNU")
 

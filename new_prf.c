@@ -214,7 +214,7 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
         func_call_count++;
 
         ptrace(PTRACE_GETREGS, child_pid, NULL, &regs);
-        printf("PRF:: run %lu first parameter is %d\n", func_call_count, (int)regs.rdi);
+        printf("PRF:: run #%d first parameter is %d\n", func_call_count, (int)regs.rdi);
 
         curr_rsp = regs.rsp;
 
