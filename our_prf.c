@@ -204,7 +204,7 @@ void run_sys_debugger(pid_t child_pid, unsigned long func_addr, bool is_extern) 
         ptrace(PTRACE_POKETEXT, child_pid, (void*)address, (void*)data_trap);
 
         ///let child run until first breakpoint:
-        ptrace(PTRACE_CONT,child_pid,NULL,NULL);
+        //ptrace(PTRACE_CONT,child_pid,NULL,NULL);
 
         ///wait for child to stop at breakpoint:
         wait(&wait_status);
