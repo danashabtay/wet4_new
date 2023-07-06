@@ -417,7 +417,7 @@ int main(int argc, char** argv) {
         fclose(file);
         free(section_header_table);
     }
-    else if(*val == 1) {
+    else if(val == 1) {
         real_func_address = res;
     }
 
