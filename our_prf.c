@@ -404,7 +404,7 @@ int main(int argc, char** argv) {
                     int index_in_dynsym = ELF64_R_SYM(info);
                     if(comparing_name(file, str_offset+dynsym_table[index_in_dynsym].st_name,func_name)==true){
                         //found the symbol!
-                        real_func_address = curr_rela_table[i].r_offset;
+                        real_func_address = curr_rela_table[j].r_offset;
                         is_extern=true;
                     }
                 }
